@@ -1,0 +1,3 @@
+connections:
+  db1: {"url": "mysql://user:pass@hostname/source_db"}
+  db2: {"url": "mysql://user:pass@hostname/dest_db"}
