@@ -8,10 +8,6 @@
 namespace Migration\Scripts;
 
 
-use Doctrine\DBAL\Configuration;
-use Doctrine\DBAL\Connection;
-use Doctrine\DBAL\DriverManager;
-
 abstract class BaseMigrationScript
 {
     protected $config;
@@ -26,27 +22,31 @@ abstract class BaseMigrationScript
         $this->config = $config;
     }
 
-
-    abstract function execute();
+    /**
+     * Get the source/input data
+     *
+     * @param array $options
+     * @return mixed
+     */
+    public abstract function input(array $options);
 
     /**
-     * @param string $name
+     * Apply Transformation and prepare data for output
      *
-     * @return Connection
+     * @param array $data
+     * @param array $options
+     * @return array Data rows
      */
-    protected function getConnection($name)
-    {
-        if(isset($this->connections[$name])) {
-            return $this->connections[$name];
-        } elseif (isset($this->config['connections'][$name])) {
-            $config = new Configuration();
-            $this->connections[$name] = DriverManager::getConnection($this->config['connections'][$name], $config);
+    public abstract function prepare(array $data, array $options);
 
-            return $this->connections[$name];
-        }
-
-        throw new \InvalidArgumentException("Connection name '$name' was not defined in configuration.");
-    }
+    /**
+     * Push output to destination
+     *
+     * @param $data
+     * @param array $options
+     * @return int Number of rows
+     */
+    public abstract function output($data, array $options);
 
     /**
      * @param array $data

@@ -9,6 +9,7 @@ namespace Migration\Commands;
 
 use Symfony\Component\Console\Input\InputArgument;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class ScriptCommand extends BaseCommand
@@ -19,10 +20,7 @@ class ScriptCommand extends BaseCommand
             ->setName('migrate:script')
             ->setDescription('Executes a single script')
             ->addArgument('script', InputArgument::REQUIRED)
-            ->addArgument('batch', InputArgument::REQUIRED, "Batch size for each transaction", 100)
-
-            // the full command description shown when running the command with
-            // the "--help" option
+            ->addOption('batch', 'l', InputOption::VALUE_REQUIRED, "Batch size (limit) for each transaction")
             ->setHelp('This command allows you to create a user...')
         ;
     }
@@ -35,14 +33,23 @@ class ScriptCommand extends BaseCommand
 
         $scriptClass = "Migration\\Scripts\\{$scriptName}MigrationScript";
         if(class_exists($scriptClass)) {
-            $total = (new $scriptClass($this->config))->execute();
-            $this->say($total . ' Rows updated');
+            $script = new $scriptClass($this->config);
+            $options = $input->getOptions();
+            $totalRows = 0;
+
+            while($data = $script->input($options)) {
+                $preparedData = $script->prepare($data, $options);
+                $insertedRows = $script->output($preparedData, $options);
+
+                $this->say("Inserted so far: {$insertedRows} rows.", OutputInterface::VERBOSITY_VERBOSE);
+                $totalRows += $insertedRows;
+            }
+
+            $this->say("Total {$totalRows} inserted.");
 
         } else {
             throw new \Exception('Migration script not found: '. $scriptClass);
         }
-
-        //$this->say('Just running '. $input->getArgument('script'));
     }
 
 
