@@ -8,55 +8,48 @@
 namespace Migration\Scripts;
 
 
+use Migration\Transformers\CustomTransformer;
 use Migration\Transformers\DateTransformer;
 use Migration\Transformers\SequenceTransformer;
 
-class UserMigrationScript extends BaseMigrationScript
+class UserMigrationScript extends DBMigrationScript
 {
-    public function execute()
+    protected $inputOptions = [
+        'connection' => 'kt',
+        'table' => 'users'
+    ];
+
+    protected $outputOptions = [
+        'connection' => 'kms',
+        'table' => 'bkash_users',
+        'fields' => ['id', 'username', 'username_canonical', 'email', 'email_canonical', 'full_name', 'enabled', 'locked', 'salt', 'password', 'roles']
+    ];
+
+    protected function prepareTransformers()
     {
-        $source = $this->getConnection('kt');
-        $users = $source->executeQuery("SELECT * FROM users");
+        $this->addTransformer('seq', new SequenceTransformer(['column' => 'id', 'initial' => 1000000000]));
 
-        $data = $users->fetchAll();
-
-        $newData = [];
-
-        // Prepare Transformers
-        $seq = new SequenceTransformer(['column' => 'id', 'initial' => 1000000000]);
         // Input Date: 11-JUN-13 02.13.32.000000 PM
-        $dateConverter = new DateTransformer([
+        $this->addTransformer('dateConverter', new DateTransformer([
             'from' => 'd-M-y h.i.s.u A',
             'fromCol' => 'REGISTEREDON',
             'toCol' => 'created_at'
-        ]);
+        ]));
 
-        foreach ($data as $row) {
-            $newRow = $row;
-
-            $seq->transform($newRow);
-            $dateConverter->transform($newRow);
-
-            $newRow['username'] = substr($row['EMAIL'], 0, strpos($row['EMAIL'], '@'));
-            $newRow['username_canonical'] = $newRow['username'];
-            $newRow['email'] = $newRow['EMAIL'];
-            $newRow['email_canonical'] = $newRow['EMAIL'];
-            $newRow['full_name'] = $row['FIRSTNAME']. ' ' .$row['LASTNAME'];
-            $newRow['enabled'] = 1;
-            $newRow['locked'] = 0;
-            $newRow['salt'] = 0;
-            $newRow['password'] = $row['PASSWORD'];
-            $newRow['roles'] = 'a:0:{}';
-
-            $newData[] = $newRow;
-        }
-
-        $dest = $this->getConnection('kms');
-        $dest->beginTransaction();
-        foreach ($newData as $row) {
-            $row = $this->trim($row, ['PASSWORD', 'FIRSTNAME', 'LASTNAME', 'EMAIL', 'REGISTEREDON'], false);
-            $dest->insert('bkash_users', $row);
-        }
-        $dest->commit();
+        $this->addTransformer('createUsername', new CustomTransformer([
+            'func' => function($row) {
+                $row['username'] = substr($row['EMAIL'], 0, strpos($row['EMAIL'], '@'));
+                $row['username_canonical'] = $row['username'];
+                $row['email'] = $row['EMAIL'];
+                $row['email_canonical'] = $row['EMAIL'];
+                $row['full_name'] = $row['FIRSTNAME']. ' ' .$row['LASTNAME'];
+                $row['enabled'] = 1;
+                $row['locked'] = 0;
+                $row['salt'] = 0;
+                $row['password'] = $row['PASSWORD'];
+                $row['roles'] = 'a:0:{}';
+                return $row;
+            }
+        ]));
     }
 }

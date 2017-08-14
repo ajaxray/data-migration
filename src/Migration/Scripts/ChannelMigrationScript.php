@@ -27,16 +27,16 @@ class ChannelMigrationScript extends DBMigrationScript
 
     protected function prepareTransformers()
     {
-        $this->transformers['seq'] = new SequenceTransformer(['column' => 'id', 'initial' => 1000000000]);
+        $this->addTransformer('seq', new SequenceTransformer(['column' => 'id', 'initial' => 1000000000]));
 
         // Inout Date: 5/9/2016 7:00:36 AM
-        $this->transformers['dateConverter'] = new DateTransformer([
+        $this->addTransformer('dateConverter', new DateTransformer([
             'from'    => 'j/n/Y g:i:s A',
             'fromCol' => 'INSERT_DT',
             'toCol'   => 'createdAt'
-        ]);
+        ]));
 
-        $this->transformers['copyToDestFields'] = new CopyTransformer([
+        $this->addTransformer('copyToDestFields', new CopyTransformer([
             'fields'       => [
                 'agent_wallet_number'  => 'AGENT',
                 'dso_wallet_number'    => 'RA',
@@ -45,6 +45,6 @@ class ChannelMigrationScript extends DBMigrationScript
                 'agent_type'           => 'AGENT_TYPE',
             ],
             'removeSource' => true,
-        ]);
+        ]));
     }
 }

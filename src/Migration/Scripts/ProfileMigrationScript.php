@@ -8,35 +8,27 @@
 namespace Migration\Scripts;
 
 
-use Migration\Transformers\DateTransformer;
-use Migration\Transformers\DBLookupTransformer;
-use Migration\Transformers\SequenceTransformer;
+use Migration\Transformers\CopyTransformer;
 
-class ProfileMigrationScript extends BaseMigrationScript
+class ProfileMigrationScript extends DBMigrationScript
 {
-    public function execute()
+    protected $inputOptions = [
+        'connection' => 'kms',
+        'table' => 'bkash_users',
+        'fields' => ['id']
+    ];
+
+    protected $outputOptions = [
+        'connection' => 'kms',
+        'table' => 'bkash_profiles',
+        'fields' => ['user_id']
+    ];
+
+    protected function prepareTransformers()
     {
-        $kms = $this->getConnection('kms');
-
-        $users = $kms->executeQuery("SELECT id FROM bkash_users");
-
-        $data = $users->fetchAll();
-
-        $newData = [];
-        foreach ($data as $row) {
-            $newRow = $row;
-
-            $newRow['user_id'] = $row['id'];
-            $newData[] = $newRow;
-        }
-
-        $kms->beginTransaction();
-        foreach ($newData as $row) {
-            $row = $this->trim($row, ['user_id']);
-            $kms->insert('bkash_profiles', $row);
-        }
-        $kms->commit();
-
-        return count($data);
+        $this->addTransformer('rename', new CopyTransformer([
+            'fields' => ['user_id' => 'id'],
+            'removeSource' => true
+        ]));
     }
 }

@@ -8,69 +8,61 @@
 namespace Migration\Scripts;
 
 
+use Migration\Transformers\CopyTransformer;
 use Migration\Transformers\DateTransformer;
 use Migration\Transformers\DBLookupTransformer;
 use Migration\Transformers\SequenceTransformer;
 
-class DistMigrationScript extends BaseMigrationScript
+class DistMigrationScript extends DBMigrationScript
 {
-    public function execute()
+    protected $inputOptions = [
+        'connection' => 'kt',
+        'table' => 'dist_map',
+    ];
+
+    protected $outputOptions = [
+        'connection' => 'kms',
+        'table' => 'bkash_distributors',
+        'fields' => ['distributor_id', 'user_id', 'name', 'wallet_number', 'created_by', 'createdAt']
+    ];
+
+    protected function prepareTransformers()
     {
-        $kt = $this->getConnection('kt');
         $kms = $this->getConnection('kms');
 
-        $dist = $kt->executeQuery("SELECT * FROM dist_map");
+        $this->addTransformer('seq', new SequenceTransformer([
+            'column' => 'distributor_id',
+            'initial' => 1000000000
+        ]));
 
-        $data = $dist->fetchAll();
-
-        $newData = [];
-
-        // Prepare Transformers
-        $seq = new SequenceTransformer(['column' => 'distributor_id', 'initial' => 1000000000]);
-        $dateConverter = new DateTransformer([
+        $this->addTransformer('dateConverter', new DateTransformer([
             'from' => 'd-M-y h.i.s.u A',
             'fromCol' => 'ADDED_ON',
             'toCol' => 'createdAt'
-        ]);
+        ]));
 
-        $findCreatorByEmail = new DBLookupTransformer([
+        $this->addTransformer('findCreatorByEmail', new DBLookupTransformer([
             'conn' => $kms,
             'table' => 'bkash_users',
             'field' => 'id',
             'matchField' => 'email',
             'matchWith' => 'ADDED_BY',
             'column' => 'created_by',
-        ]);
+        ]));
 
-        $findUserIdAndNameByEmail = new DBLookupTransformer([
+        $this->addTransformer('findUserIdAndNameByEmail', new DBLookupTransformer([
             'conn' => $kms,
             'table' => 'bkash_users',
             'field' => ['id', 'full_name'],
             'matchField' => 'email',
             'matchWith' => 'EMAIL',
             'column' => ['user_id', 'name'],
-        ]);
+        ]));
 
-        foreach ($data as $row) {
-            $newRow = $row;
+        $this->addTransformer('copyWallet', new CopyTransformer([
+            'fields' => ['wallet_number' => 'WALLET']
+        ]));
 
-            $seq->transform($newRow);
-            $dateConverter->transform($newRow);
-            $findUserIdAndNameByEmail->transform($newRow);
-            $findCreatorByEmail->transform($newRow);
-
-            $newRow['wallet_number'] = $newRow['WALLET'];
-
-            $newData[] = $newRow;
-        }
-
-        $kms->beginTransaction();
-        foreach ($newData as $row) {
-            $row = $this->trim($row, ['distributor_id', 'user_id', 'name', 'wallet_number', 'created_by', 'createdAt']);
-            $kms->insert('bkash_distributors', $row);
-        }
-        $kms->commit();
-
-        return count($data);
     }
+
 }

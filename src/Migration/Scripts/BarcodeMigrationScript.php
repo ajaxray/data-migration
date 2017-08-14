@@ -8,56 +8,52 @@
 namespace Migration\Scripts;
 
 
+use Migration\Transformers\CustomTransformer;
 use Migration\Transformers\DateTransformer;
 use Migration\Transformers\DBLookupTransformer;
 use Migration\Transformers\SequenceTransformer;
 
-class BarcodeMigrationScript extends BaseMigrationScript
+class BarcodeMigrationScript extends DBMigrationScript
 {
-    public function execute()
+    protected $inputOptions = [
+        'connection' => 'kt',
+        'table' => 'authorized_tracking_no',
+    ];
+
+    protected $outputOptions = [
+        'connection' => 'kms',
+        'table' => 'bkash_barcodes',
+        'fields' => ['barcode_number', 'created_by', 'createdAt', 'registered']
+    ];
+
+    protected function prepareTransformers()
     {
         $kms = $this->getConnection('kms');
-        $kt = $this->getConnection('kt');
-
-        $numbers = $kt->executeQuery("SELECT * FROM authorized_tracking_no");
-
-        $data = $numbers->fetchAll();
-        $newData = [];
 
         // Input Date: 11-JUN-13 02.13.32.000000 PM
-        $dateConverter = new DateTransformer([
+        $this->addTransformer('dateConverter', new DateTransformer([
             'from' => 'd-M-y h.i.s.u A',
             'fromCol' => 'CREATE_TIME',
             'toCol' => 'createdAt'
-        ]);
-        $findCreatorByEmail = new DBLookupTransformer([
+        ]));
+
+        $this->addTransformer('findCreatorByEmail', new DBLookupTransformer([
             'conn' => $kms,
             'table' => 'bkash_users',
             'field' => 'id',
             'matchField' => 'email',
             'matchWith' => 'CREATED_BY',
             'column' => 'created_by',
-        ]);
+            'onFail' => DBLookupTransformer::ON_FAIL_NULL
+        ]));
 
-        foreach ($data as $row) {
-            $newRow = $row;
-
-            $dateConverter->transform($newRow);
-            $findCreatorByEmail->transform($newRow);
-
-            $newRow['barcode_number'] = $row['KYC_TRACKING_NO'];
-            $newRow['registered'] = ('Y' == $row['REGISTERED']) ? 1 : 0;
-
-            $newData[] = $newRow;
-        }
-
-        $kms->beginTransaction();
-        foreach ($newData as $row) {
-            $row = $this->trim($row, ['barcode_number', 'created_by', 'createdAt', 'registered']);
-            $kms->insert('bkash_barcodes', $row);
-        }
-        $kms->commit();
-
-        return count($data);
+        $this->addTransformer('createUsername', new CustomTransformer([
+            'func' => function($row) {
+                $row['barcode_number'] = $row['KYC_TRACKING_NO'];
+                $row['registered'] = ('Y' == $row['REGISTERED']) ? 1 : 0;
+                return $row;
+            }
+        ]));
     }
+
 }
