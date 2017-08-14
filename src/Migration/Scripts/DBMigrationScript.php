@@ -19,7 +19,6 @@ abstract class DBMigrationScript extends BaseMigrationScript
     protected $config;
     protected $connections = [];
 
-    protected $transformers = [];
     protected $inputOptions = [];
     protected $outputOptions = [];
     protected $offset = 0;
@@ -45,11 +44,14 @@ abstract class DBMigrationScript extends BaseMigrationScript
         $this->prepareTransformers();
     }
 
-    protected function prepareTransformers()
-    {
-        // OPTIONAL Initialize your transformers and put in $this->transformers
-        // This will help to transform all data rows using default DBMigrationScript::prepare
-    }
+    /**
+     * Initialize your transformers with and register with BaseMigrationScript::addTransformer
+     * This will help to transform all data rows using default DBMigrationScript::prepare
+     * You can still overwrite self::prepare for further data manipulation
+     *
+     * @return void
+     */
+    abstract protected function prepareTransformers();
 
     /**
      * @inheritdoc
@@ -85,10 +87,18 @@ abstract class DBMigrationScript extends BaseMigrationScript
 
         foreach ($data as $row) {
             $newRow = $row;
-            foreach ($this->transformers as $transformer) {
+            foreach ($this->transformers as $name => $transformer) {
                 $transformer->transform($newRow);
+
+                if(is_null($newRow)) {
+                    break; // Last transformer requested to ignore this row
+                }
             }
-            $newData[] = $newRow;
+
+            // Add row to data unless unless set to be ignored
+            if(is_array($newRow)) {
+                $newData[] = $newRow;
+            }
         }
 
         return $newData;

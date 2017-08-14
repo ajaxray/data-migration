@@ -21,6 +21,7 @@ class ScriptCommand extends BaseCommand
             ->setDescription('Executes a single script')
             ->addArgument('script', InputArgument::REQUIRED)
             ->addOption('batch', 'l', InputOption::VALUE_REQUIRED, "Batch size (limit) for each transaction")
+            ->addOption('dry-run', null, InputOption::VALUE_NONE, "Do not actually insert rows, dumps instead")
             ->setHelp('This command allows you to create a user...')
         ;
     }
@@ -39,13 +40,23 @@ class ScriptCommand extends BaseCommand
 
             while($data = $script->input($options)) {
                 $preparedData = $script->prepare($data, $options);
+
+                if($options['dry-run']) {
+                    print_r($preparedData);
+                    continue;
+                }
+
                 $insertedRows = $script->output($preparedData, $options);
 
-                $this->say("Inserted so far: {$insertedRows} rows.", OutputInterface::VERBOSITY_VERBOSE);
+                $this->say("Inserted : {$insertedRows} rows.", OutputInterface::VERBOSITY_VERBOSE);
                 $totalRows += $insertedRows;
+
+                if(! isset($options['batch'])) {
+                    break;
+                }
             }
 
-            $this->say("Total {$totalRows} inserted.");
+            $this->say("Total {$totalRows} rows inserted.");
 
         } else {
             throw new \Exception('Migration script not found: '. $scriptClass);

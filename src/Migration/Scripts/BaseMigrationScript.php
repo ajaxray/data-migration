@@ -8,10 +8,13 @@
 namespace Migration\Scripts;
 
 
+use Migration\Transformers\TransformerInterface;
+
 abstract class BaseMigrationScript
 {
     protected $config;
     protected $connections = [];
+    protected $transformers = [];
 
     /**
      * ScriptCommand constructor.
@@ -47,6 +50,21 @@ abstract class BaseMigrationScript
      * @return int Number of rows
      */
     public abstract function output($data, array $options);
+
+    /**
+     * Add a Transformer instance
+     *
+     * @param $name
+     * @param TransformerInterface $transformer
+     *
+     * @return $this
+     */
+    protected function addTransformer($name, TransformerInterface $transformer)
+    {
+        $this->transformers[$name] = $transformer;
+
+        return $this;
+    }
 
     /**
      * @param array $data

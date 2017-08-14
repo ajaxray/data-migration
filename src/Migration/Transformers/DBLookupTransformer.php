@@ -13,6 +13,11 @@ use Doctrine\DBAL\Statement;
 
 class DBLookupTransformer implements TransformerInterface
 {
+    const ON_FAIL_IGNORE = 'ignore';
+    const ON_FAIL_EMPTY = '';
+    const ON_FAIL_ZERO = 0;
+    const ON_FAIL_NULL = null;
+
     /**
      * @var Connection
      */
@@ -23,7 +28,7 @@ class DBLookupTransformer implements TransformerInterface
      */
     private $stmt;
 
-    private $table, $field, $matchField, $matchWith, $column;
+    private $table, $field, $matchField, $matchWith, $column, $onFail;
 
     /**
      * DBLookupTransformer constructor.
@@ -35,6 +40,7 @@ class DBLookupTransformer implements TransformerInterface
      *    - matchField : The field name to use with WHERE clause
      *    - matchWith : The key of current row to be used as value of WHERE clause
      *    - column : New column(s) to create from matched row. single are array (must be same with "field")
+     *    - onFail : What should do if lookup failed? Should be one of self::ON_FAIL_* constants
      *
      * @param array $config
      */
@@ -47,6 +53,8 @@ class DBLookupTransformer implements TransformerInterface
         $this->matchWith = $config['matchWith'];
         $this->column = $config['column'];
 
+        $this->onFail = isset($config['onFail'])? $config['onFail'] : self::ON_FAIL_NULL;
+
         $field = is_array($this->field) ? implode(', ', $this->field) : $this->field;
         $this->stmt = $this->conn->prepare("SELECT $field FROM {$this->table} WHERE {$this->matchField} = ? LIMIT 1");
     }
@@ -56,14 +64,28 @@ class DBLookupTransformer implements TransformerInterface
         $this->stmt->bindValue(1, $row[$this->matchWith]);
         $this->stmt->execute();
 
-        if(is_array($this->column)) {
-            // Create columns with names in $this->column sequentially
-            foreach ($this->stmt->fetch(\PDO::FETCH_NUM) as $i => $val) {
-                $row[$this->column[$i]] = $val;
+        if($this->stmt->rowCount()) {
+            // Found lookup row
+
+            if(is_array($this->column)) {
+                // Create columns with names in $config['column'] sequentially
+                foreach ($this->stmt->fetch(\PDO::FETCH_NUM) as $i => $val) {
+                    $row[$this->column[$i]] = $val;
+                }
+            } else {
+                $row[$this->column] = $this->stmt->fetchColumn();
             }
         } else {
-            $row[$this->column] = $this->stmt->fetchColumn();
+
+            // No matching row found for lookup
+            if($this->onFail == self::ON_FAIL_IGNORE) {
+                $row = null;
+            } else {
+                $row[$this->column] = $this->onFail;
+            }
         }
+
+
 
 
     }
